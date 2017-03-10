@@ -8,6 +8,8 @@ var cookie = require('cookies');
 var cookieParser = require('cookie-parser');
 
 var userList = [];
+var userMap = new Map();
+var messages = [];
 
 http.listen( port, function () {
     console.log('listening on port', port);
@@ -15,26 +17,17 @@ http.listen( port, function () {
 
 app.use(cookieParser());
 
-//skeleton taken from expressjs.com tutorials
-app.get('/', function(req, res, next){
-   if(req.cookies.user === undefined || req.cookies.user === null) 
-   {
-       userID = "user" + Math.floor((Math.random()*1000) + 1);
-       res.cookie("userID", userID);
-       userList.push(userID);
-   }
-   
-   if(req.cookies.user === undefined || req.cookies.user === null) 
-   {
-       userColour = "red";
-       res.cookie("userColour", userColour);
-   }
-   
-    next();    
-});
-
 // listen to 'chat' messages
 io.on('connection', function(socket){
+    
+    socket.on('addUser', function(addID, addColour){
+        userList.push(addID);
+        userMap.set(socket, {userID: addID, colour: addColour});
+        io.emit('changeList', userList);
+        socket.emit('loadMessages', messages);
+        socket.emit('changeID', addID);
+    });
+    
     socket.on('chat', function(msg, id, colour){
         
         var words = msg.split(" ");
@@ -43,6 +36,7 @@ io.on('connection', function(socket){
         if(firstWord === "/nickcolor")
         {
             var newColour = words[1];
+            userMap.set(socket, {userID: userMap.get(socket).userID, colour: newColour});
             socket.emit('changeColour', newColour);
         }
             
@@ -55,14 +49,43 @@ io.on('connection', function(socket){
             {
                 socket.emit('changeID', newID);
                 userList[userList.indexOf(id)] = newID;
-
+                userMap.set(socket, {userID: newID, colour: userMap.get(socket).colour});
+                io.emit('changeList', userList);
             }
         }
         
-        console.log(userList);
+        var time = getTime();
         
-	io.emit('chat', msg, getTime(), id, colour);       
+        
+        var message = '<li><b>' + time + '</b>' + '<span style="color:' + colour + '">' + 
+        id + " </span>" + msg + '</li>';  
+        
+        if(messages.length < 200)
+        {
+            messages.push(message);      
+        }
+        
+        else{
+            messages.shift();
+            messages.push(message);
+        }
+        
+        socket.emit('chat', msg, time, id, colour, "bold");
+	socket.broadcast.emit('chat', msg, time, id, colour, "");       
     });
+    
+    socket.on('disconnect', function(){
+       userList = []; 
+       userMap.delete(socket);
+       
+       userMap.forEach(function(userInfo, socket){
+          userList.push(userInfo.userID); 
+       });
+       
+       io.emit('changeList', userList);
+    });
+    
+    
 });
 
 
