@@ -5,6 +5,13 @@
     box-sizing: border-box; 
 }
 
+//fix for firefox found on stack overflow
+@-moz-document url-prefix(){
+    *{
+        min-height: 0;
+    }
+}
+
 body, html 
 { 
     font: 13px Helvetica, Arial; 
